@@ -16,56 +16,81 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT } = process.env;
 const logMessages = [];
 
 app.post("/webhook", async (req, res) => {
-  const logEntry = `Incoming webhook message: ${JSON.stringify(req.body, null, 2)}`;
-  console.log(logEntry);
+  const logEntry = `Incoming webhook message: ${JSON.stringify(
+    req.body,
+    null,
+    2
+  )}`;
+  logMessages.push(req.body);
 
-  const entries = req.body.entry || [];
-  for (const entry of entries) {
-    const changes = entry.changes || [];
-    for (const change of changes) {
-      const messageValue = change.value;
-      const statuses = messageValue.statuses || [];
-      const messages = messageValue.messages || [];
+  const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
+  const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
+  const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
 
-      // Handling statuses updates
-      for (const status of statuses) {
-        const conversationId = status.conversation?.id || null;
+  const newMessage = new WhatsappMessage({
+    messaging_product:
+      req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
+    display_phone_number: metadata?.display_phone_number,
+    phone_number_id: metadata?.phone_number_id,
+    status: status?.status,
+    timestamp: status?.timestamp || message?.timestamp,
+    recipient_id: status?.recipient_id,
+    conversation_id: status?.conversation?.id,
+    conversation_expiration_timestamp:
+      status?.conversation?.expiration_timestamp,
+    conversation_origin_type: status?.conversation?.origin?.type,
+    pricing_billable: status?.pricing?.billable,
+    pricing_model: status?.pricing?.pricing_model,
+    pricing_category: status?.pricing?.category,
+    contact_name: contact?.profile?.name,
+    contact_wa_id: contact?.wa_id,
+    message_from: message?.from,
+    message_id: message?.id,
+    message_text_body: message?.text?.body,
+    message_type: message?.type,
+  });
 
-        // Save only the latest "read" status or update existing records
-        if (status.status === "read") {
-          await WhatsappMessage.findOneAndUpdate(
-            { conversationId, receiver: status.recipient_id }, // Find by conversation ID and receiver
-            {
-              messageId: status.id,
-              sender: "whatsapp_business_account",
-              receiver: status.recipient_id,
-              timestamp: new Date(parseInt(status.timestamp) * 1000),
-              status: status.status,
-              conversationId,
-              expirationTimestamp: new Date(parseInt(status.conversation?.expiration_timestamp) * 1000),
-              pricing: status.pricing || {},
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true } // Upsert document
-          );
-        }
-      }
+  try {
+    await newMessage.save();
+  } catch (error) {
+    console.error("Error saving message to MongoDB:", error);
+  }
 
-      // Handling messages received
-      for (const message of messages) {
-        await WhatsappMessage.findOneAndUpdate(
-          { conversationId: messageValue.conversation?.id, sender: message.from },
-          {
-            messageId: message.id,
-            sender: message.from,
-            receiver: messageValue.metadata.display_phone_number,
-            text: message.text?.body,
-            timestamp: new Date(parseInt(message.timestamp) * 1000),
-            status: "received",
-            conversationId: messageValue.conversation?.id || message.id,
+  if (message?.type === "text") {
+    const business_phone_number_id = metadata?.phone_number_id;
+
+    try {
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
+        headers: {
+          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+        },
+        data: {
+          messaging_product: "whatsapp",
+          to: message.from,
+          text: { body: "Echo: " + message.text.body },
+          context: {
+            message_id: message.id,
           },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-      }
+        },
+      });
+
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
+        headers: {
+          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+        },
+        data: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: message.id,
+        },
+      });
+    } catch (error) {
+      console.error("Error sending reply or marking as read:", error);
     }
   }
 
@@ -80,21 +105,20 @@ app.get("/webhook", (req, res) => {
   if (mode === "subscribe" && token === WEBHOOK_VERIFY_TOKEN) {
     res.status(200).send(challenge);
     console.log("Webhook verified successfully!");
-  } else if (mode === undefined && token === undefined && challenge === undefined) {
-    WhatsappMessage.find({}, (err, messages) => {
-      if (err) {
-        res.status(500).json({ error: "Error fetching log messages." });
-      } else {
-        res.status(200).json({ logMessages: messages });
-      }
-    });
+  } else if (
+    mode === undefined &&
+    token === undefined &&
+    challenge === undefined
+  ) {
+    res.status(200).json({ logMessages });
   } else {
     res.sendStatus(403);
   }
 });
 
 app.get("/", (req, res) => {
-  res.send(`<pre>Nothing to see here. Checkout README.md to start.</pre>`);
+  res.send(`<pre>Nothing to see here.
+Checkout README.md to start.</pre>`);
 });
 
 app.listen(PORT, () => {
