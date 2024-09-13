@@ -5,8 +5,8 @@ const db = require("./config/db");
 const WhatsappMessage = require("./models/WhatsappMessage");
 
 db()
-  .then()
-  .catch((err) => console.log(err));
+  .then(() => console.log("Database connected successfully"))
+  .catch((err) => console.log("Database connection error:", err));
 
 dotenv.config();
 const app = express();
@@ -16,11 +16,6 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT } = process.env;
 const logMessages = [];
 
 app.post("/webhook", async (req, res) => {
-  const logEntry = `Incoming webhook message: ${JSON.stringify(
-    req.body,
-    null,
-    2
-  )}`;
   logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
@@ -28,7 +23,7 @@ app.post("/webhook", async (req, res) => {
   const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
 
-  const newMessage = new WhatsappMessage({
+  const data = {
     messaging_product:
       req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
     display_phone_number: metadata?.display_phone_number,
@@ -49,10 +44,14 @@ app.post("/webhook", async (req, res) => {
     message_id: message?.id,
     message_text_body: message?.text?.body,
     message_type: message?.type,
-  });
+  };
 
   try {
-    await newMessage.save();
+    await WhatsappMessage.findOneAndUpdate(
+      { conversation_id: data.conversation_id },
+      data,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
   } catch (error) {
     console.error("Error saving message to MongoDB:", error);
   }

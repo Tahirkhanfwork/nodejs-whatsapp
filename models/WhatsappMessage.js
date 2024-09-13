@@ -1,4 +1,3 @@
-// models/WhatsappMessage.js
 const mongoose = require("mongoose");
 
 const WhatsappMessageSchema = new mongoose.Schema({
