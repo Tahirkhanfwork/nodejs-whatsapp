@@ -62,7 +62,7 @@ app.post("/webhook", async (req, res) => {
     try {
       await axios({
         method: "POST",
-        url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
+        url: `https://graph.facebook.com/v18.0/421883474342343/messages`,
         headers: {
           Authorization: `Bearer ${GRAPH_API_TOKEN}`,
         },
@@ -78,7 +78,7 @@ app.post("/webhook", async (req, res) => {
 
       await axios({
         method: "POST",
-        url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
+        url: `https://graph.facebook.com/v18.0/421883474342343/messages`,
         headers: {
           Authorization: `Bearer ${GRAPH_API_TOKEN}`,
         },
