@@ -19,60 +19,74 @@ const logMessages = [];
 app.post('/webhook', (req, res) => {
   const incomingMessage = req.body;
 
-  if (incomingMessage.messages && incomingMessage.messages[0].text.body == 'Hello I want to book an appointment') {
-    // Send interactive message with buttons
-    axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, {
-      messaging_product: "whatsapp",
-      to: incomingMessage.messages[0].from,
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: {
-          text: "Please choose one of the following options:"
-        },
-        action: {
-          buttons: [
-            {
-              type: "reply",
-              reply: {
-                id: "make_payment",
-                title: "Make Payment"
-              }
-            },
-            {
-              type: "reply",
-              reply: {
-                id: "new_patient",
-                title: "New Patient"
-              }
-            },
-            {
-              type: "reply",
-              reply: {
-                id: "existing_patient",
-                title: "Existing Patient"
-              }
-            }
-          ]
-        }
-      }
-    }, {
-      headers: {
-        Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    .then(response => {
-      console.log('Interactive message sent');
-    })
-    .catch(error => {
-      console.error('Error sending message:', error);
-    });
-  }
-  
-  res.sendStatus(200); // Acknowledge the request
-});
+  if (incomingMessage.object === 'whatsapp_business_account') {
+    incomingMessage.entry.forEach(entry => {
+      entry.changes.forEach(change => {
+        if (change.value.messages) {
+          const message = change.value.messages[0];
+          const senderNumber = message.from;
+          const messageBody = message.text.body;
 
+          console.log('Received message:', messageBody, 'from', senderNumber);
+
+          if (messageBody === 'Hello I want to book an appointment') {
+            // Send interactive message with buttons
+            axios.post(`https://graph.facebook.com/v18.0/421883474342343/messages`, {
+              messaging_product: "whatsapp",
+              to: message.from,
+              type: "interactive",
+              interactive: {
+                type: "button",
+                body: {
+                  text: "Please choose one of the following options:"
+                },
+                action: {
+                  buttons: [
+                    {
+                      type: "reply",
+                      reply: {
+                        id: "make_payment",
+                        title: "Make Payment"
+                      }
+                    },
+                    {
+                      type: "reply",
+                      reply: {
+                        id: "new_patient",
+                        title: "New Patient"
+                      }
+                    },
+                    {
+                      type: "reply",
+                      reply: {
+                        id: "existing_patient",
+                        title: "Existing Patient"
+                      }
+                    }
+                  ]
+                }
+              }
+            }, {
+              headers: {
+                Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
+            })
+            .then(response => {
+              console.log('Interactive message sent:', response.data);
+            })
+            .catch(error => {
+              console.error('Error sending interactive message:', error.response ? error.response.data : error.message);
+            });
+          }
+        }
+      });
+    });
+    res.sendStatus(200); // Acknowledge the request
+  } else {
+    res.sendStatus(404);
+  }
+});
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
