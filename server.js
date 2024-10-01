@@ -3,7 +3,7 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const db = require("./config/db");
 const WhatsappMessage = require("./models/WhatsappMessage");
-
+const phone_number_id = '421883474342343';
 db()
   .then(() => console.log("Database connected successfully"))
   .catch((err) => console.log("Database connection error:", err));
