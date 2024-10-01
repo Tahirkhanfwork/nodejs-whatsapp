@@ -3,7 +3,7 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const db = require("./config/db");
 const WhatsappMessage = require("./models/WhatsappMessage");
-const phone_number_id = '421883474342343';
+
 db()
   .then(() => console.log("Database connected successfully"))
   .catch((err) => console.log("Database connection error:", err));
@@ -16,76 +16,80 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT } = process.env;
 const logMessages = [];
 
 // Webhook for receiving messages from WhatsApp
-app.post('/webhook', (req, res) => {
-  const incomingMessage = req.body;
+app.post("/webhook", async (req, res) => {
+  logMessages.push(req.body);  // Log incoming request for debugging
 
-  if (incomingMessage.object === 'whatsapp_business_account') {
-    incomingMessage.entry.forEach(entry => {
-      entry.changes.forEach(change => {
-        if (change.value.messages) {
-          const message = change.value.messages[0];
-          const senderNumber = message.from;
-          const messageBody = message.text.body;
+  const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
 
-          console.log('Received message:', messageBody, 'from', senderNumber);
+  if (message?.type === "text") {
+    const business_phone_number_id = metadata?.phone_number_id;
 
-          if (messageBody === 'Hello I want to book an appointment') {
-            // Send interactive message with buttons
-            axios.post(`https://graph.facebook.com/v18.0/421883474342343/messages`, {
-              messaging_product: "whatsapp",
-              to: message.from,
-              type: "interactive",
-              interactive: {
-                type: "button",
-                body: {
-                  text: "Please choose one of the following options:"
-                },
-                action: {
-                  buttons: [
-                    {
-                      type: "reply",
-                      reply: {
-                        id: "make_payment",
-                        title: "Make Payment"
-                      }
-                    },
-                    {
-                      type: "reply",
-                      reply: {
-                        id: "new_patient",
-                        title: "New Patient"
-                      }
-                    },
-                    {
-                      type: "reply",
-                      reply: {
-                        id: "existing_patient",
-                        title: "Existing Patient"
-                      }
-                    }
-                  ]
-                }
-              }
-            }, {
-              headers: {
-                Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            })
-            .then(response => {
-              console.log('Interactive message sent:', response.data);
-            })
-            .catch(error => {
-              console.error('Error sending interactive message:', error.response ? error.response.data : error.message);
-            });
+    try {
+      // Send interactive buttons instead of echo message
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v20.0/421883474342343/messages`,
+        headers: {
+          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+        },
+        data: {
+  "messaging_product": "whatsapp",
+  "to": "918446239407",
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "body": {
+      "text": "Choose an option:"
+    },
+    "action": {
+      "buttons": [
+        {
+          "type": "reply",
+          "reply": {
+            "id": "make_payment",
+            "title": "Pay Now"
+          }
+        },
+        {
+          "type": "reply",
+          "reply": {
+            "id": "other_enquiry",
+            "title": "Enquiry"
+          }
+        },
+        {
+          "type": "reply",
+          "reply": {
+            "id": "new_patient",
+            "title": "New Patient"
           }
         }
-      });
-    });
-    res.sendStatus(200); // Acknowledge the request
-  } else {
-    res.sendStatus(404);
+      ]
+    }
   }
+},
+      });
+
+      // Mark the message as "read"
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v20.0/421883474342343/messages`,
+        headers: {
+          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+        },
+        data: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: message.id,
+        },
+      });
+    } catch (error) {
+      console.error("Error sending buttons or marking as read:", error);
+    }
+  }
+
+  res.sendStatus(200);
 });
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
