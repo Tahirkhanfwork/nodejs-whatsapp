@@ -73,49 +73,6 @@ app.post('/webhook', (req, res) => {
   res.sendStatus(200); // Acknowledge the request
 });
 
-await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/421883474342343/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        },
-        data: {
-  "messaging_product": "whatsapp",
-  "to": "918446239407",
-  "type": "interactive",
-  "interactive": {
-    "type": "button",
-    "body": {
-      "text": "Choose an option:"
-    },
-    "action": {
-      "buttons": [
-        {
-          "type": "reply",
-          "reply": {
-            "id": "make_payment",
-            "title": "Pay Now"
-          }
-        },
-        {
-          "type": "reply",
-          "reply": {
-            "id": "other_enquiry",
-            "title": "Enquiry"
-          }
-        },
-        {
-          "type": "reply",
-          "reply": {
-            "id": "new_patient",
-            "title": "New Patient"
-          }
-        }
-      ]
-    }
-  }
-},
-      });
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
