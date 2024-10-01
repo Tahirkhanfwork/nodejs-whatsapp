@@ -16,80 +16,61 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT } = process.env;
 const logMessages = [];
 
 // Webhook for receiving messages from WhatsApp
-app.post("/webhook", async (req, res) => {
-  logMessages.push(req.body);  // Log incoming request for debugging
+app.post('/webhook', (req, res) => {
+  const incomingMessage = req.body;
 
-  const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
-
-  if (message?.type === "text") {
-    const business_phone_number_id = metadata?.phone_number_id;
-
-    try {
-      // Send interactive buttons instead of echo message
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/421883474342343/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+  if (incomingMessage.messages && incomingMessage.messages[0].text.body === 'Hello, I want to book an appointment') {
+    // Send interactive message with buttons
+    axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, {
+      messaging_product: "whatsapp",
+      to: incomingMessage.messages[0].from,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text: "Please choose one of the following options:"
         },
-        data: {
-  "messaging_product": "whatsapp",
-  "to": "918446239407",
-  "type": "interactive",
-  "interactive": {
-    "type": "button",
-    "body": {
-      "text": "Choose an option:"
-    },
-    "action": {
-      "buttons": [
-        {
-          "type": "reply",
-          "reply": {
-            "id": "make_payment",
-            "title": "Pay Now"
-          }
-        },
-        {
-          "type": "reply",
-          "reply": {
-            "id": "other_enquiry",
-            "title": "Enquiry"
-          }
-        },
-        {
-          "type": "reply",
-          "reply": {
-            "id": "new_patient",
-            "title": "New Patient"
-          }
+        action: {
+          buttons: [
+            {
+              type: "reply",
+              reply: {
+                id: "make_payment",
+                title: "Make Payment"
+              }
+            },
+            {
+              type: "reply",
+              reply: {
+                id: "new_patient",
+                title: "New Patient"
+              }
+            },
+            {
+              type: "reply",
+              reply: {
+                id: "existing_patient",
+                title: "Existing Patient"
+              }
+            }
+          ]
         }
-      ]
-    }
+      }
+    }, {
+      headers: {
+        Authorization: `Bearer ${your_access_token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => {
+      console.log('Interactive message sent');
+    })
+    .catch(error => {
+      console.error('Error sending message:', error);
+    });
   }
-},
-      });
-
-      // Mark the message as "read"
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/421883474342343/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: message.id,
-        },
-      });
-    } catch (error) {
-      console.error("Error sending buttons or marking as read:", error);
-    }
-  }
-
-  res.sendStatus(200);
+  
+  res.sendStatus(200); // Acknowledge the request
 });
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
