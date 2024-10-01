@@ -19,7 +19,7 @@ const logMessages = [];
 app.post('/webhook', (req, res) => {
   const incomingMessage = req.body;
 
-  if (incomingMessage.messages && incomingMessage.messages[0].text.body === 'Hello, I want to book an appointment') {
+  if (incomingMessage.messages && incomingMessage.messages[0].text.body === 'Hello I want to book an appointment') {
     // Send interactive message with buttons
     axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, {
       messaging_product: "whatsapp",
