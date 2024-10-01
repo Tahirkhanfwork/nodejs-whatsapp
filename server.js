@@ -1,8 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const http = require('http');
-const ngrok = require('@ngrok/ngrok');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
