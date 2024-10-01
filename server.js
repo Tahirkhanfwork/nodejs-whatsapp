@@ -58,7 +58,7 @@ app.post('/webhook', (req, res) => {
       }
     }, {
       headers: {
-        Authorization: `Bearer ${your_access_token}`,
+        Authorization: `Bearer ${GRAPH_API_TOKEN}`,
         'Content-Type': 'application/json'
       }
     })
