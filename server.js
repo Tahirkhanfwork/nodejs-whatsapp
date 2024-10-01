@@ -34,48 +34,41 @@ app.post("/webhook", async (req, res) => {
           Authorization: `Bearer ${GRAPH_API_TOKEN}`,
         },
         data: {
-          messaging_product: "whatsapp",
-          to: message.from,
-          type: "interactive",
-          interactive: {
-            type: "button",
-            body: {
-              text: "Please choose one of the following options:"
-            },
-            action: {
-              buttons: [
-                {
-                  type: "reply",
-                  reply: {
-                    id: "make_payment",
-                    title: "Make Payment"
-                  }
-                },
-                {
-                  type: "reply",
-                  reply: {
-                    id: "other_enquiry",
-                    title: "Other Enquiry"
-                  }
-                },
-                {
-                  type: "reply",
-                  reply: {
-                    id: "new_patient",
-                    title: "New Patient"
-                  }
-                },
-                {
-                  type: "reply",
-                  reply: {
-                    id: "existing_patient",
-                    title: "Existing Patient"
-                  }
-                }
-              ]
-            }
+  "messaging_product": "whatsapp",
+  "to": "918446239407",
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "body": {
+      "text": "Choose an option:"
+    },
+    "action": {
+      "buttons": [
+        {
+          "type": "reply",
+          "reply": {
+            "id": "make_payment",
+            "title": "Pay Now"
           }
         },
+        {
+          "type": "reply",
+          "reply": {
+            "id": "other_enquiry",
+            "title": "Enquiry"
+          }
+        },
+        {
+          "type": "reply",
+          "reply": {
+            "id": "new_patient",
+            "title": "New Patient"
+          }
+        }
+      ]
+    }
+  }
+},
       });
 
       // Mark the message as "read"
