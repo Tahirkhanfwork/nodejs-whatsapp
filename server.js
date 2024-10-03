@@ -4,11 +4,11 @@ const dotenv = require("dotenv");
 const db = require("./config/db");
 const WhatsappMessage = require("./models/WhatsappMessage");
 
-dotenv.config();
 db()
   .then(() => console.log("Database connected successfully"))
   .catch((err) => console.log("Database connection error:", err));
 
+dotenv.config();
 const app = express();
 app.use(express.json());
 
@@ -16,76 +16,56 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, phone_number_id } = process
 
 app.post("/webhook", async (req, res) => {
   try {
-    console.log('Webhook Received:', JSON.stringify(req.body, null, 2)); // Debugging the full payload
-
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
     const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
     const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
+    const messaging_product = req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product;
 
-    // Ensure we have a message from the user and not our own outgoing messages
-    if (message?.from && message?.from !== phone_number_id) {
-      const userPhoneNumber = message.from;
-      const messageType = message.type;
-      const messageTimestamp = message.timestamp;
-      const messageTextBody = message?.text?.body || null;
-      const buttonReply = message?.interactive?.button_reply;
+    // Construct the data object
+    const data = {
+      messaging_product: messaging_product,  // Correctly assigned from the "value" field
+      display_phone_number: metadata?.display_phone_number,
+      phone_number_id: metadata?.phone_number_id,
+      recipient_id: contact?.wa_id,
+      contact_name: contact?.profile?.name,
+      conversation_id: status?.conversation?.id || null,
+      messages: [],
+    };
 
-      // Prepare the message object
-      const messageData = {
+    // Check if conversation exists
+    let conversation = await WhatsappMessage.findOne({ conversation_id: data.conversation_id });
+
+    if (!conversation) {
+      console.log("No conversation found, creating a new one...");
+      conversation = new WhatsappMessage(data);
+    }
+
+    // Only save user messages, not your own
+    if (message?.from === data.recipient_id) {
+      const userMessage = {
         message_id: message.id,
-        message_type: messageType,
-        timestamp: messageTimestamp,
+        message_text_body: message.text?.body || null,
+        message_type: message.type,
+        timestamp: message.timestamp,
       };
 
-      if (messageType === "text") {
-        messageData.message_text_body = messageTextBody;
-      } else if (messageType === "interactive" && buttonReply) {
-        messageData.button_id = buttonReply.id;
-        messageData.button_title = buttonReply.title;
+      // For interactive button replies, save button details
+      if (message.type === "interactive" && message.interactive?.type === "button_reply") {
+        userMessage.message_type = "button_reply";
+        userMessage.button_id = message.interactive.button_reply.id;
+        userMessage.button_title = message.interactive.button_reply.title;
       }
 
-      console.log('Message Data:', messageData); // Debugging message data
-
-      // Check if there is an existing document for this user based on contact_wa_id
-      const existingConversation = await WhatsappMessage.findOne({ contact_wa_id: userPhoneNumber });
-
-      if (existingConversation) {
-        // Update the existing document with the new message
-        console.log('Existing conversation found, updating...');
-        await WhatsappMessage.updateOne(
-          { contact_wa_id: userPhoneNumber },
-          { $push: { messages: messageData } }
-        );
-      } else {
-        // Ensure that `metadata` and `messaging_product` are valid before creating a new document
-        if (!metadata?.messaging_product) {
-          console.error("Error: messaging_product is missing from metadata.");
-          return res.status(400).send("messaging_product is required.");
-        }
-
-        // Create a new document for this user
-        console.log('No conversation found, creating a new one...');
-        const newConversation = new WhatsappMessage({
-          messaging_product: metadata?.messaging_product, // Ensure this field is set
-          display_phone_number: metadata?.display_phone_number,
-          phone_number_id: metadata?.phone_number_id,
-          contact_name: contact?.profile?.name,
-          contact_wa_id: userPhoneNumber,
-          recipient_id: userPhoneNumber,
-          messages: [messageData],
-        });
-
-        await newConversation.save();
-        console.log('New conversation saved successfully');
-      }
-    } else {
-      console.log("Message is from our own number or invalid");
+      conversation.messages.push(userMessage);
     }
+
+    await conversation.save();
 
     res.sendStatus(200);
   } catch (error) {
     console.error("Error in /webhook route:", error);
-    res.sendStatus(500); // Respond with error status if something goes wrong
+    res.status(500).send("Internal Server Error");
   }
 });
 
@@ -101,23 +81,6 @@ app.get("/webhook", (req, res) => {
     res.sendStatus(403);
   }
 });
-
-async function sendWhatsAppMessage(recipient, messageText) {
-  const data = {
-    messaging_product: 'whatsapp',
-    to: recipient,
-    text: { body: messageText },
-  };
-
-  try {
-    const response = await axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, data, {
-      headers: { Authorization: `Bearer ${GRAPH_API_TOKEN}` },
-    });
-    console.log('Message sent:', response.data); // Debugging the response
-  } catch (error) {
-    console.error('Error sending message:', error.response ? error.response.data : error.message);
-  }
-}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
