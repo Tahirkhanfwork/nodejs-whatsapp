@@ -16,6 +16,7 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, phone_number_id } = process
 const logMessages = [];
 
 app.post("/webhook", async (req, res) => {
+  console.log(req.body);
   logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
