@@ -52,7 +52,6 @@ app.post("/webhook", async (req, res) => {
         messages: [newMessage],
       });
       await newEntry.save();
-      console.log(`New entry created for user: ${contact?.wa_id}`);
     }
   } catch (error) {
     console.error("Error saving message to MongoDB:", error);
@@ -117,7 +116,6 @@ app.post("/webhook", async (req, res) => {
           message_type: "button_reply",
         });
         await existingUser   .save();
-        console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
         if (buttonId === "new_patient_yes") {
           await axios({
@@ -160,7 +158,6 @@ app.post("/webhook", async (req, res) => {
     }
   } else if (message?.type === "text") {
     try {
-      await sendWhatsAppMessage(message.from, "Do you want to confirm an appointment?");
       await axios({
         method: "POST",
         url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
@@ -229,7 +226,6 @@ async function sendWhatsAppMessage(recipient, messageText) {
     const response = await axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, data, {
       headers: { Authorization: `Bearer ${GRAPH_API_TOKEN}` },
     });
-    console.log('Message sent:', response.data);
   } catch (error) {
     console.error('Error sending message:', error.response ? error.response.data : error.message);
   }
