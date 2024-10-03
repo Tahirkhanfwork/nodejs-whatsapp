@@ -57,10 +57,16 @@ app.post("/webhook", async (req, res) => {
           { $push: { messages: messageData } }
         );
       } else {
+        // Ensure that `metadata` and `messaging_product` are valid before creating a new document
+        if (!metadata?.messaging_product) {
+          console.error("Error: messaging_product is missing from metadata.");
+          return res.status(400).send("messaging_product is required.");
+        }
+
         // Create a new document for this user
         console.log('No conversation found, creating a new one...');
         const newConversation = new WhatsappMessage({
-          messaging_product: metadata?.messaging_product,
+          messaging_product: metadata?.messaging_product, // Ensure this field is set
           display_phone_number: metadata?.display_phone_number,
           phone_number_id: metadata?.phone_number_id,
           contact_name: contact?.profile?.name,
