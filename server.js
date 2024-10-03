@@ -12,7 +12,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, WHATSAPP_API_URL, phone_number_id } = process.env;
+const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, phone_number_id } = process.env;
 const logMessages = [];
 
 // Webhook to handle incoming messages
@@ -20,45 +20,48 @@ app.post("/webhook", async (req, res) => {
   logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
   const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
 
-  // Data to be saved to MongoDB
-  const data = {
-    messaging_product: req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
-    display_phone_number: metadata?.display_phone_number,
-    phone_number_id: metadata?.phone_number_id,
-    status: status?.status || message?.status,
-    timestamp: status?.timestamp || message?.timestamp,
-    recipient_id: status?.recipient_id || message?.from,
-    conversation_id: status?.conversation?.id || null,
-    conversation_expiration_timestamp: status?.conversation?.expiration_timestamp || null,
-    conversation_origin_type: status?.conversation?.origin?.type || null,
-    pricing_billable: status?.pricing?.billable || null,
-    pricing_model: status?.pricing?.pricing_model || null,
-    pricing_category: status?.pricing?.category || null,
-    contact_name: contact?.profile?.name || null,
-    contact_wa_id: contact?.wa_id || message?.from,
-    message_from: message?.from || null,
-    message_id: message?.id || status?.id,
-    message_text_body: message?.text?.body || null,
-    message_type: message?.type || status?.type,
+  // Extract the necessary data
+  const newMessage = {
+    message_id: message?.id,
+    message_text_body: message?.text?.body,
+    message_type: message?.type,
+    timestamp: message?.timestamp,
   };
 
   try {
-    // Save message data to MongoDB (upsert to handle existing conversations)
-    await WhatsappMessage.findOneAndUpdate(
-      { message_id: data.message_id },
-      data,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    console.log(`Message saved successfully: ${data.message_id}`);
+    // Find the user by their WhatsApp ID or conversation_id
+    const existingUser = await WhatsappMessage.findOne({
+      contact_wa_id: contact?.wa_id
+    });
+
+    if (existingUser) {
+      // If user exists, append the new message to their message array
+      existingUser.messages.push(newMessage);
+      await existingUser.save();
+      console.log(`Message appended to existing user: ${contact?.wa_id}`);
+    } else {
+      // If user doesn't exist, create a new entry for the user
+      const newEntry = new WhatsappMessage({
+        messaging_product: req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
+        display_phone_number: metadata?.display_phone_number,
+        phone_number_id: metadata?.phone_number_id,
+        contact_name: contact?.profile?.name,
+        contact_wa_id: contact?.wa_id,
+        recipient_id: message?.from,
+        conversation_id: null, // Assuming we might not have a conversation ID always
+        messages: [newMessage],
+      });
+      await newEntry.save();
+      console.log(`New entry created for user: ${contact?.wa_id}`);
+    }
   } catch (error) {
     console.error("Error saving message to MongoDB:", error);
   }
 
-  // Check if it's a text message and send interactive buttons
+  // If it's a text message, respond with buttons
   if (message?.type === "text") {
     try {
       await axios({
@@ -80,7 +83,7 @@ app.post("/webhook", async (req, res) => {
               buttons: [
                 { type: "reply", reply: { id: "make_payment", title: "Pay Now" } },
                 { type: "reply", reply: { id: "other_enquiry", title: "Enquiry" } },
-                { type: "reply", reply: { id: "new_patient", title: "New Patient" } }
+                { type: "reply", reply: { id: "new_patient", title: "New Patient" } },
               ]
             },
           },
@@ -103,29 +106,34 @@ app.post("/webhook", async (req, res) => {
     } catch (error) {
       console.error("Error sending buttons or marking as read:", error);
     }
-  }
-
-  // Handle button replies
-  else if (message?.type === "interactive" && message?.interactive?.type === "button_reply") {
+  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply") {
     const buttonId = message.interactive.button_reply.id;
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      // Save the button response to MongoDB
-      await WhatsappMessage.findOneAndUpdate(
-        { message_id: message.id },
-        { button_id: buttonId, button_title: buttonTitle },
-        { upsert: true, new: true }
-      );
-      console.log(`Button reply saved: ${buttonTitle}`);
+      // Append button click info to the user's messages array
+      const existingUser = await WhatsappMessage.findOne({
+        contact_wa_id: contact?.wa_id
+      });
 
-      // Send appropriate response based on the button clicked
-      if (buttonId === "make_payment") {
-        await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
-      } else if (buttonId === "other_enquiry") {
-        await sendWhatsAppMessage(message.from, "Please contact our customer care at +1 234-567-890 for further assistance.");
-      } else if (buttonId === "new_patient") {
-        await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
+      if (existingUser) {
+        existingUser.messages.push({
+          message_id: message.id,
+          button_id: buttonId,
+          button_title: buttonTitle,
+          message_type: "button_reply",
+        });
+        await existingUser.save();
+        console.log(`Button reply appended for user: ${contact?.wa_id}`);
+
+        // Send appropriate response based on the button clicked
+        if (buttonId === "make_payment") {
+          await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
+        } else if (buttonId === "other_enquiry") {
+          await sendWhatsAppMessage(message.from, "Please contact our customer care at +1 234-567-890 for further assistance.");
+        } else if (buttonId === "new_patient") {
+          await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
+        }
       }
     } catch (error) {
       console.error("Error saving button click:", error);
@@ -135,7 +143,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// Webhook verification endpoint
+// Webhook verification
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
