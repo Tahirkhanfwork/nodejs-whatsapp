@@ -19,7 +19,42 @@ app.post("/webhook", async (req, res) => {
   logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
+  const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
+
+  const data = {
+    messaging_product:
+      req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
+    display_phone_number: metadata?.display_phone_number,
+    phone_number_id: metadata?.phone_number_id,
+    status: status?.status,
+    timestamp: status?.timestamp || message?.timestamp,
+    recipient_id: status?.recipient_id,
+    conversation_id: status?.conversation?.id,
+    conversation_expiration_timestamp:
+      status?.conversation?.expiration_timestamp,
+    conversation_origin_type: status?.conversation?.origin?.type,
+    pricing_billable: status?.pricing?.billable,
+    pricing_model: status?.pricing?.pricing_model,
+    pricing_category: status?.pricing?.category,
+    contact_name: contact?.profile?.name,
+    contact_wa_id: contact?.wa_id,
+    message_from: message?.from,
+    message_id: message?.id,
+    message_text_body: message?.text?.body,
+    message_type: message?.type,
+  };
+
+  try {
+    await WhatsappMessage.findOneAndUpdate(
+      { conversation_id: data.conversation_id },
+      data,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    console.error("Error saving message to MongoDB:", error);
+  }
 
   if (message?.type === "text") {
     const business_phone_number_id = metadata?.phone_number_id;
@@ -123,7 +158,6 @@ async function sendWhatsAppMessage(recipient, messageText) {
     const response = await axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, data, {
       headers: { Authorization: `Bearer ${GRAPH_API_TOKEN}` },
     });
-    console.log('Message sent:', response.data);
   } catch (error) {
     console.error('Error sending message:', error.response ? error.response.data : error.message);
   }
