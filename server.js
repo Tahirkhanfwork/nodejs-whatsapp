@@ -15,9 +15,8 @@ app.use(express.json());
 const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, WHATSAPP_API_URL, phone_number_id } = process.env;
 const logMessages = [];
 
-// Webhook for receiving messages from WhatsApp
 app.post("/webhook", async (req, res) => {
-  logMessages.push(req.body); // Log incoming request for debugging
+  logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
@@ -26,7 +25,6 @@ app.post("/webhook", async (req, res) => {
     const business_phone_number_id = metadata?.phone_number_id;
 
     try {
-      // Send interactive buttons
       await axios({
         method: "POST",
         url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
@@ -71,7 +69,6 @@ app.post("/webhook", async (req, res) => {
         },
       });
 
-      // Mark the message as "read"
       await axios({
         method: "POST",
         url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
@@ -90,15 +87,11 @@ app.post("/webhook", async (req, res) => {
   } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply") {
     const buttonId = message.interactive.button_reply.id;
 
-    // Handle response based on button selection
     if (buttonId === "make_payment") {
-      // Respond with "Enter account number"
       await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
     } else if (buttonId === "other_enquiry") {
-      // Respond with "Contact customer care"
       await sendWhatsAppMessage(message.from, "Please contact our customer care at +1 234-567-890 for further assistance.");
     } else if (buttonId === "new_patient") {
-      // Respond with "Enter your name and email"
       await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
     }
   }
@@ -119,7 +112,6 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// Function to send a message via WhatsApp API
 async function sendWhatsAppMessage(recipient, messageText) {
   const data = {
     messaging_product: 'whatsapp',
@@ -137,7 +129,6 @@ async function sendWhatsAppMessage(recipient, messageText) {
   }
 }
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
