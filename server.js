@@ -31,14 +31,14 @@ app.post("/webhook", async (req, res) => {
   };
 
   try {
-    const existingUser   = await WhatsappMessage.findOne({
+    const existingUser    = await WhatsappMessage.findOne({
       contact_wa_id: contact?.wa_id
     });
 
-    if (existingUser  ) {
+    if (existingUser   ) {
       if (message?.from === contact?.wa_id) {
-        existingUser  .messages.push(newMessage);
-        await existingUser  .save();
+        existingUser   .messages.push(newMessage);
+        await existingUser   .save();
       }
     } else {
       const newEntry = new WhatsappMessage({
@@ -105,18 +105,18 @@ app.post("/webhook", async (req, res) => {
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      const existingUser   = await WhatsappMessage.findOne({
+      const existingUser    = await WhatsappMessage.findOne({
         contact_wa_id: contact?.wa_id
       });
 
-      if (existingUser  ) {
-        existingUser  .messages.push({
+      if (existingUser   ) {
+        existingUser   .messages.push({
           message_id: message.id,
           button_id: buttonId,
           button_title: buttonTitle,
           message_type: "button_reply",
         });
-        await existingUser  .save();
+        await existingUser   .save();
         console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
         if (buttonId === "new_patient_yes") {
@@ -130,7 +130,7 @@ app.post("/webhook", async (req, res) => {
               messaging_product: "whatsapp",
               to: message.from,
               type: "interactive",
-              interactive: {
+              interactive : {
                 type: "button",
                 body: {
                   text: "Please select a treatment:",
@@ -148,11 +148,11 @@ app.post("/webhook", async (req, res) => {
         } else if (buttonId === "new_patient_no") {
           await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
         } else if (buttonId === "implant") {
-          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for Implant treatment?");
         } else if (buttonId === "rct") {
-          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for RCT treatment?");
         } else if (buttonId === "sedation") {
-          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for Sedation treatment?");
         }
       }
     } catch (error) {
@@ -160,9 +160,45 @@ app.post("/webhook", async (req, res) => {
     }
   } else if (message?.type === "text") {
     try {
+      await sendWhatsAppMessage(message.from, "Do you want to confirm an appointment?");
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
+        headers: {
+          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+        },
+        data: {
+          messaging_product: "whatsapp",
+          to: message.from,
+          type: "interactive",
+          interactive: {
+            type: "button",
+            body: {
+              text: "Please confirm your appointment",
+            },
+            action: {
+              buttons: [
+                { type: "reply", reply: { id: "confirm_appointment", title: "Yes confirm" } },
+                { type: "reply", reply: { id: "cancel_appointment", title: "No cancel it" } },
+              ]
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error sending confirmation message:", error);
+    }
+  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply" && message?.interactive?.button_reply?.id === "confirm_appointment") {
+    try {
       await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
     } catch (error) {
       console.error("Error sending confirmation message:", error);
+    }
+  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply" && message?.interactive?.button_reply?.id === "cancel_appointment") {
+    try {
+      await sendWhatsAppMessage(message.from, "Thank you for cancelling your appointment!");
+    } catch (error) {
+      console.error("Error sending cancellation message:", error);
     }
   }
 
