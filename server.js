@@ -151,7 +151,12 @@ app.post("/webhook", async (req, res) => {
           await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for RCT treatment?");
         } else if (buttonId === "sedation") {
           await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for Sedation treatment?");
-        }
+        } else if (buttonId === "confirm_appointment") {
+        await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
+      } else if (buttonId === "cancel_appointment") {
+        await sendWhatsAppMessage(message.from, "Thank you for cancelling your appointment!");
+      }
+        
       }
     } catch (error) {
       console.error("Error saving button click:", error);
@@ -184,18 +189,6 @@ app.post("/webhook", async (req, res) => {
       });
     } catch (error) {
       console.error("Error sending confirmation message:", error);
-    }
-  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply" && message?.interactive?.button_reply?.id === "confirm_appointment") {
-    try {
-      await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
-    } catch (error) {
-      console.error("Error sending confirmation message:", error);
-    }
-  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply" && message?.interactive?.button_reply?.id === "cancel_appointment") {
-    try {
-      await sendWhatsAppMessage(message.from, "Thank you for cancelling your appointment!");
-    } catch (error) {
-      console.error("Error sending cancellation message:", error);
     }
   }
 
