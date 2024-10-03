@@ -158,7 +158,7 @@ app.post("/webhook", async (req, res) => {
     } catch (error) {
       console.error("Error saving button click:", error);
     }
-  } else if (message?.type === "text" && (message?.text?.body.toLowerCase().includes("today") || message?.text?.body.toLowerCase().includes("tomorrow") || message?.text?.body.toLowerCase().includes("next week"))) {
+  } else if (message?.type === "text") {
     try {
       await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
     } catch (error) {
