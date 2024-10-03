@@ -31,14 +31,14 @@ app.post("/webhook", async (req, res) => {
   };
 
   try {
-    const existingUser  = await WhatsappMessage.findOne({
+    const existingUser   = await WhatsappMessage.findOne({
       contact_wa_id: contact?.wa_id
     });
 
-    if (existingUser ) {
+    if (existingUser  ) {
       if (message?.from === contact?.wa_id) {
-        existingUser .messages.push(newMessage);
-        await existingUser .save();
+        existingUser  .messages.push(newMessage);
+        await existingUser  .save();
       }
     } else {
       const newEntry = new WhatsappMessage({
@@ -105,18 +105,18 @@ app.post("/webhook", async (req, res) => {
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      const existingUser  = await WhatsappMessage.findOne({
+      const existingUser   = await WhatsappMessage.findOne({
         contact_wa_id: contact?.wa_id
       });
 
-      if (existingUser ) {
-        existingUser .messages.push({
+      if (existingUser  ) {
+        existingUser  .messages.push({
           message_id: message.id,
           button_id: buttonId,
           button_title: buttonTitle,
           message_type: "button_reply",
         });
-        await existingUser .save();
+        await existingUser  .save();
         console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
         if (buttonId === "new_patient_yes") {
@@ -137,7 +137,7 @@ app.post("/webhook", async (req, res) => {
                 },
                 action: {
                   buttons: [
-                    { type: "reply", reply: { id: "implant", title: "Implant" } },
+                    { type : "reply", reply: { id: "implant", title: "Implant" } },
                     { type: "reply", reply: { id: "rct", title: "RCT" } },
                     { type: "reply", reply: { id: "sedation", title: "Sedation" } },
                   ]
@@ -148,15 +148,21 @@ app.post("/webhook", async (req, res) => {
         } else if (buttonId === "new_patient_no") {
           await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
         } else if (buttonId === "implant") {
-          await sendWhatsAppMessage(message.from, "You have selected Implant treatment.");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
         } else if (buttonId === "rct") {
-          await sendWhatsAppMessage(message.from, "You have selected RCT treatment.");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
         } else if (buttonId === "sedation") {
-          await sendWhatsAppMessage(message.from, "You have selected Sedation treatment.");
+          await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment?");
         }
       }
     } catch (error) {
       console.error("Error saving button click:", error);
+    }
+  } else if (message?.type === "text" && (message?.text?.body.toLowerCase().includes("today") || message?.text?.body.toLowerCase().includes("tomorrow") || message?.text?.body.toLowerCase().includes("next week"))) {
+    try {
+      await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
+    } catch (error) {
+      console.error("Error sending confirmation message:", error);
     }
   }
 
