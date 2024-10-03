@@ -31,14 +31,14 @@ app.post("/webhook", async (req, res) => {
   };
 
   try {
-    const existingUser = await WhatsappMessage.findOne({
+    const existingUser  = await WhatsappMessage.findOne({
       contact_wa_id: contact?.wa_id
     });
 
-    if (existingUser) {
+    if (existingUser ) {
       if (message?.from === contact?.wa_id) {
-        existingUser.messages.push(newMessage);
-        await existingUser.save();
+        existingUser .messages.push(newMessage);
+        await existingUser .save();
       }
     } else {
       const newEntry = new WhatsappMessage({
@@ -105,24 +105,54 @@ app.post("/webhook", async (req, res) => {
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      const existingUser = await WhatsappMessage.findOne({
+      const existingUser  = await WhatsappMessage.findOne({
         contact_wa_id: contact?.wa_id
       });
 
-      if (existingUser) {
-        existingUser.messages.push({
+      if (existingUser ) {
+        existingUser .messages.push({
           message_id: message.id,
           button_id: buttonId,
           button_title: buttonTitle,
           message_type: "button_reply",
         });
-        await existingUser.save();
+        await existingUser .save();
         console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
         if (buttonId === "new_patient_yes") {
-          await sendWhatsAppMessage(message.from, "Which treatment you are looking for?");
+          await axios({
+            method: "POST",
+            url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
+            headers: {
+              Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+            },
+            data: {
+              messaging_product: "whatsapp",
+              to: message.from,
+              type: "interactive",
+              interactive: {
+                type: "button",
+                body: {
+                  text: "Please select a treatment:",
+                },
+                action: {
+                  buttons: [
+                    { type: "reply", reply: { id: "implant", title: "Implant" } },
+                    { type: "reply", reply: { id: "rct", title: "RCT" } },
+                    { type: "reply", reply: { id: "sedation", title: "Sedation" } },
+                  ]
+                },
+              },
+            },
+          });
         } else if (buttonId === "new_patient_no") {
           await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
+        } else if (buttonId === "implant") {
+          await sendWhatsAppMessage(message.from, "You have selected Implant treatment.");
+        } else if (buttonId === "rct") {
+          await sendWhatsAppMessage(message.from, "You have selected RCT treatment.");
+        } else if (buttonId === "sedation") {
+          await sendWhatsAppMessage(message.from, "You have selected Sedation treatment.");
         }
       }
     } catch (error) {
