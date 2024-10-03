@@ -73,13 +73,12 @@ app.post("/webhook", async (req, res) => {
           interactive: {
             type: "button",
             body: {
-              text: "Choose an option:",
+              text: "Are you a new patient?",
             },
             action: {
               buttons: [
-                { type: "reply", reply: { id: "make_payment", title: "Pay Now" } },
-                { type: "reply", reply: { id: "other_enquiry", title: "Enquiry" } },
-                { type: "reply", reply: { id: "new_patient", title: "New Patient" } },
+                { type: "reply", reply: { id: "new_patient_yes", title: "Yes" } },
+                { type: "reply", reply: { id: "new_patient_no", title: "No" } },
               ]
             },
           },
@@ -120,11 +119,9 @@ app.post("/webhook", async (req, res) => {
         await existingUser.save();
         console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
-        if (buttonId === "make_payment") {
-          await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
-        } else if (buttonId === "other_enquiry") {
-          await sendWhatsAppMessage(message.from, "Please contact our customer care at +1 234-567-890 for further assistance.");
-        } else if (buttonId === "new_patient") {
+        if (buttonId === "new_patient_yes") {
+          await sendWhatsAppMessage(message.from, "Which treatment you are looking for?");
+        } else if (buttonId === "new_patient_no") {
           await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
         }
       }
