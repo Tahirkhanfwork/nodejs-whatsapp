@@ -15,16 +15,14 @@ app.use(express.json());
 const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, phone_number_id } = process.env;
 const logMessages = [];
 
-// Webhook to handle incoming messages
 app.post("/webhook", async (req, res) => {
   logMessages.push(req.body);
 
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
-  const messaging_product = req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product; // Ensure this is from `value`
+  const messaging_product = req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product;
 
-  // Extract the necessary data
   const newMessage = {
     message_id: message?.id,
     message_text_body: message?.text?.body || null,
@@ -33,23 +31,18 @@ app.post("/webhook", async (req, res) => {
   };
 
   try {
-    // Find the user by their WhatsApp ID
     const existingUser = await WhatsappMessage.findOne({
       contact_wa_id: contact?.wa_id
     });
 
     if (existingUser) {
-      // If user exists, append the new message to their message array
       if (message?.from === contact?.wa_id) {
-        // Save user message only
         existingUser.messages.push(newMessage);
         await existingUser.save();
-        console.log(`Message appended to existing user: ${contact?.wa_id}`);
       }
     } else {
-      // If user doesn't exist, create a new entry for the user
       const newEntry = new WhatsappMessage({
-        messaging_product: messaging_product,  // Correct messaging product
+        messaging_product: messaging_product,
         display_phone_number: metadata?.display_phone_number,
         phone_number_id: metadata?.phone_number_id,
         contact_name: contact?.profile?.name,
@@ -65,8 +58,7 @@ app.post("/webhook", async (req, res) => {
     console.error("Error saving message to MongoDB:", error);
   }
 
-  // If it's a text message, respond with buttons
-  if (message?.type === "text") {
+  if (message?.type === "text" && newMessage.message_text_body=="Hello I want to book an appointment") {
     try {
       await axios({
         method: "POST",
@@ -94,7 +86,6 @@ app.post("/webhook", async (req, res) => {
         },
       });
 
-      // Mark message as read
       await axios({
         method: "POST",
         url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
@@ -115,7 +106,6 @@ app.post("/webhook", async (req, res) => {
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      // Append button click info to the user's messages array
       const existingUser = await WhatsappMessage.findOne({
         contact_wa_id: contact?.wa_id
       });
@@ -130,7 +120,6 @@ app.post("/webhook", async (req, res) => {
         await existingUser.save();
         console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
-        // Send appropriate response based on the button clicked
         if (buttonId === "make_payment") {
           await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
         } else if (buttonId === "other_enquiry") {
@@ -147,7 +136,6 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// Webhook verification
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -161,7 +149,6 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// Helper function to send WhatsApp messages
 async function sendWhatsAppMessage(recipient, messageText) {
   const data = {
     messaging_product: "whatsapp",
