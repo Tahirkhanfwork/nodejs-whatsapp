@@ -37,20 +37,24 @@ app.post("/webhook", async (req, res) => {
     });
 
     if (existingConversation) {
-      existingConversation.messages.push(newMessage);
+      if (newMessage.message_text_body !== null) {
+        existingConversation.messages.push(newMessage);
+      }
       await existingConversation.save();
     } else {
-      const newEntry = new WhatsappMessage({
-        messaging_product: messaging_product,
-        display_phone_number: metadata?.display_phone_number,
-        phone_number_id: metadata?.phone_number_id,
-        contact_name: contact?.profile?.name,
-        contact_wa_id: contact?.wa_id,
-        recipient_id: message?.from,
-        conversation_id: conversation_id,
-        messages: [newMessage],
-      });
-      await newEntry.save();
+      if (newMessage.message_text_body !== null) {
+        const newEntry = new WhatsappMessage({
+          messaging_product: messaging_product,
+          display_phone_number: metadata?.display_phone_number,
+          phone_number_id: metadata?.phone_number_id,
+          contact_name: contact?.profile?.name,
+          contact_wa_id: contact?.wa_id,
+          recipient_id: message?.from,
+          conversation_id: conversation_id,
+          messages: [newMessage],
+        });
+        await newEntry.save();
+      }
     }
   } catch (error) {
     console.error("Error saving message to MongoDB:", error);
@@ -103,18 +107,18 @@ app.post("/webhook", async (req, res) => {
     const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      const existingUser    = await WhatsappMessage.findOne({
-        contact_wa_id: contact?.wa_id
+      const existingConversation = await WhatsappMessage.findOne({
+        conversation_id: conversation_id,
       });
 
-      if (existingUser   ) {
-        existingUser   .messages.push({
+      if (existingConversation) {
+        existingConversation.messages.push({
           message_id: message.id,
           button_id: buttonId,
           button_title: buttonTitle,
           message_type: "button_reply",
         });
-        await existingUser.save();
+        await existingConversation.save();
 
         if (buttonId === "new_patient_yes") {
           await axios({
@@ -151,41 +155,49 @@ app.post("/webhook", async (req, res) => {
         } else if (buttonId === "sedation") {
           await sendWhatsAppMessage(message.from, "When would you like to schedule an appointment for Sedation treatment?");
         } else if (buttonId === "confirm_appointment") {
-        await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
-      } else if (buttonId === "cancel_appointment") {
-        await sendWhatsAppMessage(message.from, "Thank you for cancelling your appointment!");
-      }
-        
+          await sendWhatsAppMessage(message.from, "Thank you for confirming your appointment!");
+        } else if (buttonId === "cancel_appointment") {
+          await sendWhatsAppMessage(message.from, "Thank you for cancelling your appointment!");
+        }
       }
     } catch (error) {
       console.error("Error saving button click:", error);
     }
   } else if (message?.type === "text") {
     try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          to: message.from,
-          type: "interactive",
-          interactive: {
-            type: "button",
-            body: {
-              text: "Please confirm your appointment",
-            },
-            action: {
-              buttons: [
-                { type: "reply", reply: { id: "confirm_appointment", title: "Yes confirm" } },
-                { type: "reply", reply: { id: "cancel_appointment", title: "No cancel it" } },
-              ]
+      const existingConversation = await WhatsappMessage.findOne({
+        conversation_id: conversation_id,
+      });
+
+      if (existingConversation) {
+        if (existingConversation.messages.length > 0 && existingConversation.messages[existingConversation.messages.length - 1].message_text_body === "Please confirm your appointment") {
+          return;
+        }
+        await axios({
+          method: "POST",
+          url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
+          headers: {
+            Authorization: `Bearer ${GRAPH_API_TOKEN}`,
+          },
+          data: {
+            messaging_product: "whatsapp",
+            to: message.from,
+            type: "interactive",
+            interactive: {
+              type: "button",
+              body: {
+                text: "Please confirm your appointment",
+              },
+              action: {
+                buttons: [
+                  { type: "reply", reply: { id: "confirm_appointment", title: "Yes confirm" } },
+                  { type: "reply", reply: { id: "cancel_appointment", title: "No cancel it" } },
+                ]
+              },
             },
           },
-        },
-      });
+        });
+      }
     } catch (error) {
       console.error("Error sending confirmation message:", error);
     }
