@@ -32,16 +32,13 @@ app.post("/webhook", async (req, res) => {
   };
 
   try {
-    const existingUser    = await WhatsappMessage.findOne({
-      contact_wa_id: contact?.wa_id,
-      conversation_id: conversation_id
+    const existingConversation = await WhatsappMessage.findOne({
+      conversation_id: conversation_id,
     });
 
-    if (existingUser   ) {
-      if (message?.from === contact?.wa_id) {
-        existingUser   .messages.push(newMessage);
-        await existingUser.save();
-      }
+    if (existingConversation) {
+      existingConversation.messages.push(newMessage);
+      await existingConversation.save();
     } else {
       const newEntry = new WhatsappMessage({
         messaging_product: messaging_product,
