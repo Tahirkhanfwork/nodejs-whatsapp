@@ -22,6 +22,7 @@ app.post("/webhook", async (req, res) => {
   const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
   const messaging_product = req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product;
+  const conversation_id = req.body.entry?.[0]?.changes?.[0]?.statuses?.[0].conversation?.id;
 
   const newMessage = {
     message_id: message?.id,
@@ -32,13 +33,14 @@ app.post("/webhook", async (req, res) => {
 
   try {
     const existingUser    = await WhatsappMessage.findOne({
-      contact_wa_id: contact?.wa_id
+      contact_wa_id: contact?.wa_id,
+      conversation_id: conversation_id
     });
 
     if (existingUser   ) {
       if (message?.from === contact?.wa_id) {
         existingUser   .messages.push(newMessage);
-        await existingUser   .save();
+        await existingUser.save();
       }
     } else {
       const newEntry = new WhatsappMessage({
@@ -48,7 +50,7 @@ app.post("/webhook", async (req, res) => {
         contact_name: contact?.profile?.name,
         contact_wa_id: contact?.wa_id,
         recipient_id: message?.from,
-        conversation_id: null,
+        conversation_id: conversation_id,
         messages: [newMessage],
       });
       await newEntry.save();
@@ -115,7 +117,7 @@ app.post("/webhook", async (req, res) => {
           button_title: buttonTitle,
           message_type: "button_reply",
         });
-        await existingUser   .save();
+        await existingUser.save();
 
         if (buttonId === "new_patient_yes") {
           await axios({
