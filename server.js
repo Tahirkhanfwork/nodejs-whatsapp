@@ -13,137 +13,66 @@ const app = express();
 app.use(express.json());
 
 const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, phone_number_id } = process.env;
-const logMessages = [];
 
-// Webhook to handle incoming messages
 app.post("/webhook", async (req, res) => {
-  logMessages.push(req.body);
-
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
   const metadata = req.body.entry?.[0]?.changes?.[0]?.value?.metadata;
 
-  // Extract the necessary data
-  const newMessage = {
-    message_id: message?.id,
-    message_text_body: message?.text?.body,
-    message_type: message?.type,
-    timestamp: message?.timestamp,
-  };
+  // Save only incoming user messages, not your outgoing messages
+  if (message?.from && message?.from !== phone_number_id) {
+    const userPhoneNumber = message.from;
+    const messageType = message.type;
+    const messageTextBody = message.text?.body || null;
+    const messageTimestamp = message.timestamp;
+    const buttonReply = message?.interactive?.button_reply;
 
-  try {
-    // Find the user by their WhatsApp ID or conversation_id
-    const existingUser = await WhatsappMessage.findOne({
-      contact_wa_id: contact?.wa_id
-    });
+    // Prepare the message object
+    const messageData = {
+      message_id: message.id,
+      message_type: messageType,
+      message_text_body: messageTextBody,
+      timestamp: messageTimestamp,
+    };
 
-    if (existingUser) {
-      // If user exists, append the new message to their message array
-      existingUser.messages.push(newMessage);
-      await existingUser.save();
-      console.log(`Message appended to existing user: ${contact?.wa_id}`);
-    } else {
-      // If user doesn't exist, create a new entry for the user
-      const newEntry = new WhatsappMessage({
-        messaging_product: req.body.entry?.[0]?.changes?.[0]?.value?.messaging_product,
-        display_phone_number: metadata?.display_phone_number,
-        phone_number_id: metadata?.phone_number_id,
-        contact_name: contact?.profile?.name,
-        contact_wa_id: contact?.wa_id,
-        recipient_id: message?.from,
-        conversation_id: null, // Assuming we might not have a conversation ID always
-        messages: [newMessage],
-      });
-      await newEntry.save();
-      console.log(`New entry created for user: ${contact?.wa_id}`);
+    if (buttonReply) {
+      messageData.button_id = buttonReply.id;
+      messageData.button_title = buttonReply.title;
     }
-  } catch (error) {
-    console.error("Error saving message to MongoDB:", error);
-  }
-
-  // If it's a text message, respond with buttons
-  if (message?.type === "text") {
-    try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          to: message.from,
-          type: "interactive",
-          interactive: {
-            type: "button",
-            body: {
-              text: "Choose an option:",
-            },
-            action: {
-              buttons: [
-                { type: "reply", reply: { id: "make_payment", title: "Pay Now" } },
-                { type: "reply", reply: { id: "other_enquiry", title: "Enquiry" } },
-                { type: "reply", reply: { id: "new_patient", title: "New Patient" } },
-              ]
-            },
-          },
-        },
-      });
-
-      // Mark message as read
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/${phone_number_id}/messages`,
-        headers: {
-          Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: message.id,
-        },
-      });
-    } catch (error) {
-      console.error("Error sending buttons or marking as read:", error);
-    }
-  } else if (message?.type === "interactive" && message?.interactive?.type === "button_reply") {
-    const buttonId = message.interactive.button_reply.id;
-    const buttonTitle = message.interactive.button_reply.title;
 
     try {
-      // Append button click info to the user's messages array
-      const existingUser = await WhatsappMessage.findOne({
-        contact_wa_id: contact?.wa_id
-      });
+      // Check if there's an existing document for this user/phone number
+      const existingConversation = await WhatsappMessage.findOne({ contact_wa_id: userPhoneNumber });
 
-      if (existingUser) {
-        existingUser.messages.push({
-          message_id: message.id,
-          button_id: buttonId,
-          button_title: buttonTitle,
-          message_type: "button_reply",
+      if (existingConversation) {
+        // Update the existing document and append the new message
+        await WhatsappMessage.updateOne(
+          { contact_wa_id: userPhoneNumber },
+          { $push: { messages: messageData } }
+        );
+      } else {
+        // Create a new document for a new conversation
+        const newConversation = new WhatsappMessage({
+          messaging_product: metadata?.messaging_product,
+          display_phone_number: metadata?.display_phone_number,
+          phone_number_id: metadata?.phone_number_id,
+          contact_name: contact?.profile?.name,
+          contact_wa_id: userPhoneNumber,
+          recipient_id: userPhoneNumber,
+          messages: [messageData],
         });
-        await existingUser.save();
-        console.log(`Button reply appended for user: ${contact?.wa_id}`);
 
-        // Send appropriate response based on the button clicked
-        if (buttonId === "make_payment") {
-          await sendWhatsAppMessage(message.from, "Please enter your account number to proceed with payment.");
-        } else if (buttonId === "other_enquiry") {
-          await sendWhatsAppMessage(message.from, "Please contact our customer care at +1 234-567-890 for further assistance.");
-        } else if (buttonId === "new_patient") {
-          await sendWhatsAppMessage(message.from, "Please enter your name and email to proceed as a new patient.");
-        }
+        await newConversation.save();
       }
     } catch (error) {
-      console.error("Error saving button click:", error);
+      console.error("Error saving message to MongoDB:", error);
     }
   }
 
   res.sendStatus(200);
 });
 
-// Webhook verification
+// Outgoing messages won't be saved
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -157,10 +86,9 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// Helper function to send WhatsApp messages
 async function sendWhatsAppMessage(recipient, messageText) {
   const data = {
-    messaging_product: "whatsapp",
+    messaging_product: 'whatsapp',
     to: recipient,
     text: { body: messageText },
   };
@@ -169,7 +97,6 @@ async function sendWhatsAppMessage(recipient, messageText) {
     const response = await axios.post(`https://graph.facebook.com/v20.0/${phone_number_id}/messages`, data, {
       headers: { Authorization: `Bearer ${GRAPH_API_TOKEN}` },
     });
-    console.log('Message sent:', response.data);
   } catch (error) {
     console.error('Error sending message:', error.response ? error.response.data : error.message);
   }
