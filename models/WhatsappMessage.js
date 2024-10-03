@@ -18,7 +18,9 @@ const WhatsappMessageSchema = new mongoose.Schema({
   message_from: { type: String },
   message_id: { type: String },
   message_text_body: { type: String },
-  message_type: { type: String }
+  message_type: { type: String },
+  button_id: { type: String },
+  button_title: { type: String },
 }, { timestamps: true });
 
 const WhatsappMessage = mongoose.model("WhatsappMessage", WhatsappMessageSchema);
